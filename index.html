@@ -5,6 +5,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- M1-2c:start（K2：ホーム画面から全画面で開くための設定。#145・P4） -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="サッカー">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- M1-2c:end -->
 <title>サッカー 操作感プロトタイプ v1.0</title>
 <style>
 :root{
@@ -76,6 +83,11 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .btn.sel{outline:2px solid var(--cursor)}
 #rotate{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:var(--navy);font-weight:700;font-size:16px;padding:20px;text-align:center}
 @media (orientation: portrait){ #rotate{display:flex} }
+/* M1-2c:start（K1・K2：引っ張って更新・ページの揺れを防ぐ表示の設定。P2） */
+html,body{overscroll-behavior:none;-webkit-text-size-adjust:100%}
+body{position:fixed;left:0;top:0;width:100%}
+#m12cNote{margin-top:10px;font-size:11px;color:var(--sub);line-height:1.5}
+/* M1-2c:end */
 </style>
 </head>
 <body>
@@ -1730,6 +1742,41 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// M1-2c:start（K3：試合の読み込み直しへの対策。#147）
+{
+  const FLAG = 'm12c-inmatch', LOGK = 'm12c-log';
+  const rd = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const wr = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
+  // ③ 前回の試合中に読み込み直されたかを記録し、開始画面に表示する
+  let log = [];
+  try { log = JSON.parse(rd(LOGK) || '[]'); } catch (e) { log = []; }
+  if (rd(FLAG)) {
+    let nav = '不明';
+    try { nav = (performance.getEntriesByType('navigation')[0] || {}).type || '不明'; } catch (e) {}
+    const d = new Date();
+    log.push({ t: (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'), nav: nav, disc: !!document.wasDiscarded, save: hasSave() });
+    log = log.slice(-5); wr(LOGK, JSON.stringify(log));
+  }
+  wr(FLAG, null);
+  const card = document.querySelector('#startOv .card');
+  if (card) {
+    const n = document.createElement('div'); n.id = 'm12cNote';
+    n.textContent = 'v1.1（M1-2c）　試合中の読み込み直し：' + (log.length ? log.map(x => x.t + ' ' + x.nav + (x.disc ? '・破棄' : '') + (x.save ? '・セーブあり' : '・セーブなし')).join(' ／ ') : 'なし');
+    card.appendChild(n);
+  }
+  // 試合中かどうかを記録（次に開いた時に「試合中に読み込み直された」と分かるように）
+  let on = false;
+  setInterval(() => { const now = !!(S && S.phase === 'play'); if (now !== on) { on = now; wr(FLAG, now ? String(Date.now()) : null); } }, 1000);
+  // ② ページを離れる時にも保存する
+  window.addEventListener('pagehide', () => { try { save(); } catch (e) {} });
+  // ① セーブがある時の「キックオフ」に確認を出す（やめる場合だけ元の処理に届かせない）
+  document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('#kickBtn') && hasSave()) {
+      if (!confirm('保存された試合があります。新しい試合を始めると、保存が消えます。始めますか？\n（続きから遊ぶ場合は「キャンセル」を押して「続きから再開」を選んでください）')) e.stopPropagation();
+    }
+  }, true);
+}
+// M1-2c:end
 // ---------- boot ----------
 resize(); buildPlayers(null); kickoffPositions(USER); setMode('attack', false);
 S = null; openStart();
@@ -1737,5 +1784,16 @@ requestAnimationFrame(frame);
 window.__dbg = { setAuto(v) { AUTO = v; if (v) control = null; }, setControl(p) { control = p; }, get S() { return S; }, players: () => players, ball, get control() { return control; }, startMatch, step: dt => step(dt) };
 })();
 </script>
+<!-- M1-2c:start（K1・K2：拡大を止める・表示領域の変化に合わせる。P2・P3。入力の受け口はdocument・window・visualViewportにだけ付け、スティック・ボタンには付けない） -->
+<script>
+(() => {
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.scale !== undefined && e.scale !== 1) e.preventDefault(); }, { passive: false });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { window.scrollTo(0, 0); window.dispatchEvent(new Event('resize')); });
+  }
+})();
+</script>
+<!-- M1-2c:end -->
 </body>
 </html>
