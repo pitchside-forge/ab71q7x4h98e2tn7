@@ -1792,6 +1792,8 @@ window.__dbg = { setAuto(v) { AUTO = v; if (v) control = null; }, setControl(p) 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => { window.scrollTo(0, 0); window.dispatchEvent(new Event('resize')); });
   }
+  // 試合画面の版の表示（#ver）をv1.1にする（v1.0の行は変えずに、表示だけ置き換える）
+  const ver = document.getElementById('ver'); if (ver) ver.textContent = 'v1.1';
 })();
 </script>
 <!-- M1-2c:end -->
